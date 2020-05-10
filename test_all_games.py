@@ -53,7 +53,7 @@ class TestAllGames(unittest.TestCase):
         rp = RandomPlayer(game).play
 
         args = dotdict({'numMCTSSims': 25, 'cpuct': 1.0})
-        mcts = MCTS(game, neural_net(game), args)
+        mcts = MCTS(game, neural_net(game), False, args)
         n1p = lambda x: np.argmax(mcts.getActionProb(x, temp=0))
 
         arena = Arena.Arena(n1p, rp, game)

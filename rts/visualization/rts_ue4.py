@@ -50,7 +50,7 @@ class TD2020LearnAPI(TFPluginAPI):
                 n1 = NNet(self.g, OneHotEncoder())
                 n1.load_checkpoint(current_directory, 'best.pth.tar')
                 args = dotdict({'numMCTSSims': 2, 'cpuct': 1.0})
-                self.mcts = MCTS(self.g, n1, args)
+                self.mcts = MCTS(self.g, n1, False, args)
 
                 self.graph_var = graph
                 self.session_var = session

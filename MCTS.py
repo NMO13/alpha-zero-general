@@ -7,10 +7,11 @@ class MCTS():
     This class handles the MCTS tree.
     """
 
-    def __init__(self, game, nnet, args):
+    def __init__(self, game, nnet, add_noise, args):
         self.game = game
         self.nnet = nnet
         self.args = args
+        self.add_noise = add_noise
         self.Qsa = {}       # stores Q values for s,a (as defined in the paper)
         self.Nsa = {}       # stores #times edge s,a was visited
         self.Ns = {}        # stores #times board s was visited
@@ -28,8 +29,8 @@ class MCTS():
             probs: a policy vector where the probability of the ith action is
                    proportional to Nsa[(s,a)]**(1./temp)
         """
-        for i in range(self.args.numMCTSSims):
-            self.search(canonicalBoard)
+        for _ in range(self.args.numMCTSSims):
+            self.search(canonicalBoard, 0)
 
         s = self.game.stringRepresentation(canonicalBoard)
         counts = [self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in range(self.game.getActionSize())]
@@ -47,7 +48,7 @@ class MCTS():
         return probs
 
 
-    def search(self, canonicalBoard):
+    def search(self, canonicalBoard, depth):
         """
         This function performs one iteration of MCTS. It is recursively called
         till a leaf node is found. The action chosen at each node is one that
@@ -100,13 +101,17 @@ class MCTS():
         cur_best = -float('inf')
         best_act = -1
 
+        p = np.copy(self.Ps[s])
+        if self.add_noise and depth == 0:
+            self.add_dirichlet(p, valids)
+
         # pick the action with the highest upper confidence bound
         for a in range(self.game.getActionSize()):
             if valids[a]:
                 if (s,a) in self.Qsa:
-                    u = self.Qsa[(s,a)] + self.args.cpuct*self.Ps[s][a]*math.sqrt(self.Ns[s])/(1+self.Nsa[(s,a)])
+                    u = self.Qsa[(s,a)] + self.args.cpuct*p[a]*math.sqrt(self.Ns[s])/(1+self.Nsa[(s,a)])
                 else:
-                    u = self.args.cpuct*self.Ps[s][a]*math.sqrt(self.Ns[s] + EPS)     # Q = 0 ?
+                    u = self.args.cpuct*p[a]*math.sqrt(self.Ns[s] + EPS)     # Q = 0 ?
 
                 if u > cur_best:
                     cur_best = u
@@ -116,7 +121,7 @@ class MCTS():
         next_s, next_player = self.game.getNextState(canonicalBoard, 1, a)
         next_s = self.game.getCanonicalForm(next_s, next_player)
 
-        v = self.search(next_s)
+        v = self.search(next_s, depth+1)
 
         if (s,a) in self.Qsa:
             self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + v)/(self.Nsa[(s,a)]+1)
@@ -128,3 +133,11 @@ class MCTS():
 
         self.Ns[s] += 1
         return -v
+
+    def add_dirichlet(self, p, valids):
+        noises = np.random.dirichlet([0.03] * np.count_nonzero(valids))
+        for i in range(len(p)):
+            if valids[i] == 1:
+                noise, noises = noises[0], noises[1:]
+                p[i] = 0.75 * p[i] + 0.25 * noise
+        return p
